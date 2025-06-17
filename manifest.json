@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Bible Verse Extractor",
+  "version": "1.0",
+  "description": "Extract Bible verses from bible.com and save as PostgreSQL-ready CSV",
+  "permissions": [
+    "activeTab", "downloads", "tabs", "scripting"
+  ],
+  "host_permissions": [
+    "https://www.bible.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.bible.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "books.json",
+        "translations.json",
+        "all_books.json"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

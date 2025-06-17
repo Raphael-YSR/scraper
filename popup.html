@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bible Parser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 300px; /* Adjusted width */
+            height: 400px; /* Adjusted height to accommodate new buttons */
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+            color: #e0e6ed;
+            padding: 10px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 255, 127, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+            gap: 15px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff7f;
+            text-shadow: 0 0 10px rgba(0, 255, 127, 0.5);
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            font-size: 11px;
+            color: #9ca3af;
+            text-align: center;
+            opacity: 0.8;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .translation-buttons {
+            display: grid; /* Use grid for translation buttons */
+            grid-template-columns: repeat(3, 1fr); /* 3 columns */
+            gap: 8px; /* Smaller gap for more compact layout */
+            margin-bottom: 15px; /* Space before chapter navigation */
+            width: 100%; /* Take full width of container */
+            max-width: 280px; /* Limit max width */
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            background: linear-gradient(45deg, #00ff7f, #00cc66);
+            border: none;
+            color: #0a0a0a;
+            padding: 8px 12px; /* Adjusted padding for all buttons */
+            font-family: 'Courier New', monospace;
+            font-size: 13px; /* Adjusted font size for all buttons */
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(0, 255, 127, 0.3);
+            position: relative;
+            overflow: hidden;
+            min-width: 50px; /* Adjusted min-width */
+            text-align: center;
+        }
+
+        .translation-buttons button {
+            padding: 6px 10px; /* Smaller padding for translation buttons */
+            font-size: 11px; /* Smaller font size for translation buttons */
+        }
+
+        #extract {
+            padding: 10px 20px; /* Adjusted padding for main extract button */
+            font-size: 14px; /* Slightly larger font for extract */
+            min-width: 120px; /* Maintain a good width */
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 127, 0.4);
+            background: linear-gradient(45deg, #00cc66, #00ff7f);
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(0, 255, 127, 0.3);
+        }
+
+        button:disabled {
+            background: #4a5568;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+            opacity: 0.7;
+        }
+
+        .status {
+            position: absolute;
+            bottom: 5px;
+            left: 20px;
+            right: 20px;
+            text-align: center;
+            font-size: 10px;
+            color: #6b7280;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .status.show {
+            opacity: 1;
+        }
+
+        .grid-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                linear-gradient(rgba(0, 255, 127, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 127, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.3;
+            z-index: 1;
+        }
+    </style>
+    <script src="popup.js" defer></script>
+</head>
+<body>
+    <div class="grid-bg"></div>
+    <div class="container">
+        <div class="logo">BIBLE.EX</div>
+        <div class="subtitle">Scripture Data Extractor</div>
+
+        <div class="translation-buttons">
+            <button id="navKJV">KJV</button>
+            <button id="navNIV">NIV</button>
+            <button id="navNKJV">NKJV</button>
+            <button id="navAMP">AMP</button>
+            <button id="navAMPC">AMPC</button>
+            <button id="navTPT">TPT</button>
+            <button id="navESV">ESV</button>
+        </div>
+
+        <div class="button-group">
+            <button id="prevChapter">&larr;</button>
+            <button id="extract">EXTRACT</button>
+            <button id="nextChapter">&rarr;</button>
+        </div>
+        <button id="chapter1">Chapter 1</button>
+        <div class="status" id="status"></div>
+    </div>
+</body>
+</html>
