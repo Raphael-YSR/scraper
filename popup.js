@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const navAMPC = document.getElementById('navAMPC');
   const navTPT = document.getElementById('navTPT');
   const navESV = document.getElementById('navESV');
+  const navNLT = document.getElementById('navNLT'); // Added NLT button reference
 
 
   // Hardcoded data for books and chapter counts (consistent with frontend)
@@ -264,10 +265,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
           // Step 1: Replace smart quotes with standard double quotes for consistency
           let cleanedVerseText = normalizedText
-            .replace(/“/g, '"')
-            .replace(/”/g, '"')
-            .replace(/‘/g, "'")
-            .replace(/’/g, "'");
+            .replace(/"/g, '"')
+            .replace(/"/g, '"')
+            .replace(/'/g, "'")
+            .replace(/'/g, "'");
 
           // Step 2: Escape any standard double quotes within the text by doubling them for CSV
           // This is crucial for CSV compliance when text contains commas or quotes.
@@ -366,6 +367,8 @@ document.addEventListener('DOMContentLoaded', () => {
       navTPT.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["TPT"], "TPT"));
       // ESV button
       navESV.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["ESV"], "ESV"));
+      // NLT button - Added event listener for NLT
+      navNLT.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["NLT"], "NLT"));
     })
     .catch(error => {
       console.error('Error loading browserversion.json:', error);

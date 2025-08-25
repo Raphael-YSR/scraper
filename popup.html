@@ -10,8 +10,8 @@
         }
 
         body {
-            width: 300px; /* Adjusted width */
-            height: 400px; /* Adjusted height to accommodate new buttons */
+            width: 320px; /* Increased width to accommodate 4 columns */
+            height: 420px; /* Slightly increased height */
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
             color: #e0e6ed;
@@ -64,12 +64,13 @@
         }
 
         .translation-buttons {
-            display: grid; /* Use grid for translation buttons */
-            grid-template-columns: repeat(3, 1fr); /* 3 columns */
-            gap: 8px; /* Smaller gap for more compact layout */
-            margin-bottom: 15px; /* Space before chapter navigation */
-            width: 100%; /* Take full width of container */
-            max-width: 280px; /* Limit max width */
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); /* Changed to 4 columns for 8 buttons */
+            grid-template-rows: repeat(2, 1fr); /* 2 rows for 8 buttons */
+            gap: 8px;
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 300px;
         }
 
         .button-group {
@@ -82,9 +83,9 @@
             background: linear-gradient(45deg, #00ff7f, #00cc66);
             border: none;
             color: #0a0a0a;
-            padding: 8px 12px; /* Adjusted padding for all buttons */
+            padding: 8px 12px;
             font-family: 'Courier New', monospace;
-            font-size: 13px; /* Adjusted font size for all buttons */
+            font-size: 13px;
             font-weight: bold;
             border-radius: 6px;
             cursor: pointer;
@@ -94,19 +95,20 @@
             box-shadow: 0 4px 15px rgba(0, 255, 127, 0.3);
             position: relative;
             overflow: hidden;
-            min-width: 50px; /* Adjusted min-width */
+            min-width: 50px;
             text-align: center;
         }
 
         .translation-buttons button {
-            padding: 6px 10px; /* Smaller padding for translation buttons */
-            font-size: 11px; /* Smaller font size for translation buttons */
+            padding: 6px 8px; /* Slightly smaller padding for 4-column layout */
+            font-size: 10px; /* Smaller font for better fit */
+            min-width: 45px; /* Adjusted min-width */
         }
 
         #extract {
-            padding: 10px 20px; /* Adjusted padding for main extract button */
-            font-size: 14px; /* Slightly larger font for extract */
-            min-width: 120px; /* Maintain a good width */
+            padding: 10px 20px;
+            font-size: 14px;
+            min-width: 120px;
         }
 
         button::before {
@@ -178,7 +180,7 @@
 <body>
     <div class="grid-bg"></div>
     <div class="container">
-        <div class="logo">BIBLE.EX</div>
+        <div class="logo">BIBLE EXTRACT</div>
         <div class="subtitle">Scripture Data Extractor</div>
 
         <div class="translation-buttons">
@@ -189,6 +191,7 @@
             <button id="navAMPC">AMPC</button>
             <button id="navTPT">TPT</button>
             <button id="navESV">ESV</button>
+            <button id="navNLT">NLT</button>
         </div>
 
         <div class="button-group">
