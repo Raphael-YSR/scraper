@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bible COPY Statement Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .chapter-range {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .chapter-range input {
+            flex: 1;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .output {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .copy-btn {
+            background-color: #007bff;
+            margin-top: 10px;
+            margin-bottom: 0;
+        }
+        .copy-btn:hover {
+            background-color: #0056b3;
+        }
+        .versions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .version-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .version-checkbox input {
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bible COPY Statement Generator</h1>
+        
+        <div class="form-group">
+            <label for="book">Book Name:</label>
+            <input type="text" id="book" placeholder="e.g., Mark, Genesis, John">
+        </div>
+        
+        <div class="form-group">
+            <label>Chapter Range:</label>
+            <div class="chapter-range">
+                <input type="number" id="startChapter" placeholder="From" min="1">
+                <span>to</span>
+                <input type="number" id="endChapter" placeholder="To" min="1">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Bible Versions:</label>
+            <div class="versions">
+                <div class="version-checkbox">
+                    <input type="checkbox" id="kjv" value="KJV" checked>
+                    <label for="kjv">KJV</label>
+                </div>
+                <div class="version-checkbox">
+                    <input type="checkbox" id="niv" value="NIV" checked>
+                    <label for="niv">NIV</label>
+                </div>
+                <div class="version-checkbox">
+                    <input type="checkbox" id="nkjv" value="NKJV" checked>
+                    <label for="nkjv">NKJV</label>
+                </div>
+                <div class="version-checkbox">
+                    <input type="checkbox" id="amp" value="AMP" checked>
+                    <label for="amp">AMP</label>
+                </div>
+                <div class="version-checkbox">
+                    <input type="checkbox" id="ampc" value="AMPC" checked>
+                    <label for="ampc">AMPC</label>
+                </div>
+                <div class="version-checkbox">
+                    <input type="checkbox" id="tpt" value="TPT" checked>
+                    <label for="tpt">TPT</label>
+                </div>
+                <div class="version-checkbox">
+                    <input type="checkbox" id="esv" value="ESV" checked>
+                    <label for="esv">ESV</label>
+                </div>
+                <div class="version-checkbox">
+                    <input type="checkbox" id="nlt" value="NLT" checked>
+                    <label for="nlt">NLT</label>
+                </div>
+            </div>
+        </div>
+        
+        <button onclick="generateStatements()">Generate COPY Statements</button>
+        
+        <div id="output" class="output" style="display: none;"></div>
+        <button id="copyBtn" class="copy-btn" style="display: none;" onclick="copyToClipboard()">Copy to Clipboard</button>
+    </div>
+
+    <script>
+        function generateStatements() {
+            const book = document.getElementById('book').value.trim();
+            const startChapter = parseInt(document.getElementById('startChapter').value);
+            const endChapter = parseInt(document.getElementById('endChapter').value);
+            
+            if (!book) {
+                alert('Please enter a book name');
+                return;
+            }
+            
+            if (!startChapter || !endChapter) {
+                alert('Please enter both start and end chapter numbers');
+                return;
+            }
+            
+            if (startChapter > endChapter) {
+                alert('Start chapter must be less than or equal to end chapter');
+                return;
+            }
+            
+            const selectedVersions = [];
+            const versionCheckboxes = document.querySelectorAll('.version-checkbox input[type="checkbox"]:checked');
+            versionCheckboxes.forEach(checkbox => {
+                selectedVersions.push(checkbox.value);
+            });
+            
+            if (selectedVersions.length === 0) {
+                alert('Please select at least one Bible version');
+                return;
+            }
+            
+            let statements = '';
+            
+            for (let version of selectedVersions) {
+                for (let chapter = startChapter; chapter <= endChapter; chapter++) {
+                    statements += `COPY verses (\n`;
+                    statements += `    translationid, bookid, chapternumber, versenumber, versetext, versetextsearchable, hasfootnotes, wordcount\n`;
+                    statements += `)\n`;
+                    statements += `FROM 'D:\\Christ\\Scripture\\verses_${book}${chapter}_${version}.csv' DELIMITER ',' CSV HEADER;\n\n`;
+                }
+            }
+            
+            document.getElementById('output').textContent = statements;
+            document.getElementById('output').style.display = 'block';
+            document.getElementById('copyBtn').style.display = 'block';
+        }
+        
+        function copyToClipboard() {
+            const output = document.getElementById('output').textContent;
+            navigator.clipboard.writeText(output).then(function() {
+                const btn = document.getElementById('copyBtn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.backgroundColor = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = '#007bff';
+                }, 2000);
+            }, function(err) {
+                alert('Failed to copy to clipboard');
+            });
+        }
+    </script>
+</body>
+</html>

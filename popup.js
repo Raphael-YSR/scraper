@@ -22,12 +22,12 @@ document.addEventListener('DOMContentLoaded', () => {
     "GEN": 1, "EXO": 2, "LEV": 3, "NUM": 4, "DEU": 5, "JOS": 6, "JDG": 7, "RUT": 8,
     "1SA": 9, "2SA": 10, "1KI": 11, "2KI": 12, "1CH": 13, "2CH": 14, "EZR": 15, "NEH": 16,
     "EST": 17, "JOB": 18, "PSA": 19, "PRO": 20, "ECC": 21, "SNG": 22, "ISA": 23, "JER": 24,
-    "LAM": 25, "EZE": 26, "DAN": 27, "HOS": 14, "JOL": 3, "AMO": 9, "OBA": 1, "JON": 4,
-    "MIC": 7, "NAH": 3, "HAB": 3, "ZEP": 3, "HAG": 2, "ZEC": 14, "MAL": 4,
-    "MAT": 28, "MRK": 16, "LUK": 24, "JHN": 21, "ACT": 28, "ROM": 16, "1CO": 16, "2CO": 13,
-    "GAL": 6, "EPH": 6, "PHP": 4, "COL": 4, "1TH": 5, "2TH": 3, "1TI": 6, "2TI": 4,
-    "TIT": 3, "PHM": 57, "HEB": 13, "JAS": 5, "1PE": 5, "2PE": 3, "1JN": 5, "2JN": 1,
-    "3JN": 1, "JUD": 1, "REV": 22
+    "LAM": 25, "EZK": 26, "DAN": 27, "HOS": 28, "JOL": 29, "AMO": 30, "OBA": 31, "JON": 32,
+    "MIC": 33, "NAM": 34, "HAB": 35, "ZEP": 36, "HAG": 37, "ZEC": 38, "MAL": 39,
+    "MAT": 40, "MRK": 41, "LUK": 42, "JHN": 43, "ACT": 44, "ROM": 45, "1CO": 46, "2CO": 47,
+    "GAL": 48, "EPH": 49, "PHP": 50, "COL": 51, "1TH": 52, "2TH": 53, "1TI": 54, "2TI": 55,
+    "TIT": 56, "PHM": 57, "HEB": 58, "JAS": 59, "1PE": 60, "2PE": 61, "1JN": 62, "2JN": 63,
+    "3JN": 64, "JUD": 65, "REV": 66
   };
 
   // Hardcoded chapter counts for each book
@@ -35,11 +35,11 @@ document.addEventListener('DOMContentLoaded', () => {
     "GEN": 50, "EXO": 40, "LEV": 27, "NUM": 36, "DEU": 34, "JOS": 24, "JDG": 21, "RUT": 4,
     "1SA": 31, "2SA": 24, "1KI": 22, "2KI": 25, "1CH": 29, "2CH": 36, "EZR": 10, "NEH": 13,
     "EST": 10, "JOB": 42, "PSA": 150, "PRO": 31, "ECC": 12, "SNG": 8, "ISA": 66, "JER": 52,
-    "LAM": 5, "EZE": 48, "DAN": 12, "HOS": 14, "JOL": 3, "AMO": 9, "OBA": 1, "JON": 4,
-    "MIC": 7, "NAH": 3, "HAB": 3, "ZEP": 3, "HAG": 2, "ZEC": 14, "MAL": 4,
+    "LAM": 5, "EZK": 48, "DAN": 12, "HOS": 14, "JOL": 3, "AMO": 9, "OBA": 1, "JON": 4,
+    "MIC": 7, "NAM": 3, "HAB": 3, "ZEP": 3, "HAG": 2, "ZEC": 14, "MAL": 4,
     "MAT": 28, "MRK": 16, "LUK": 24, "JHN": 21, "ACT": 28, "ROM": 16, "1CO": 16, "2CO": 13,
     "GAL": 6, "EPH": 6, "PHP": 4, "COL": 4, "1TH": 5, "2TH": 3, "1TI": 6, "2TI": 4,
-    "TIT": 3, "PHM": 57, "HEB": 13, "JAS": 5, "1PE": 5, "2PE": 3, "1JN": 5, "2JN": 1,
+    "TIT": 3, "PHM": 1, "HEB": 13, "JAS": 5, "1PE": 5, "2PE": 3, "1JN": 5, "2JN": 1,
     "3JN": 1, "JUD": 1, "REV": 22
   };
 
@@ -78,18 +78,77 @@ document.addEventListener('DOMContentLoaded', () => {
     const tsvectorParts = [];
     let originalWordIndex = 0; // 1-based index for original word position
 
+    // Words that should not be stemmed (common exceptions)
+    const noStemWords = new Set([
+      'hundred', 'thousand', 'blessed', 'wicked', 'sacred', 'naked', 'beloved', 
+      'learned', 'kindred', 'aged', 'red', 'dead', 'bread', 'head', 'read',
+      'seed', 'feed', 'need', 'deed', 'creed', 'breed', 'freed', 'greed', 'replied'
+    ]);
+
     words.forEach(word => {
       originalWordIndex++; // Increment for each word in the original text
 
-      // A very basic, non-linguistic "stemming" for some common endings.
-      // This is a crude approximation and will not perfectly match PostgreSQL's
-      // sophisticated stemming algorithms (e.g., Porter Stemmer for English).
       let stemmedWord = word;
-      if (stemmedWord.length > 3) { // Avoid stemming very short words
-        if (stemmedWord.endsWith('es')) stemmedWord = stemmedWord.slice(0, -2);
-        else if (stemmedWord.endsWith('ed')) stemmedWord = stemmedWord.slice(0, -2);
-        else if (stemmedWord.endsWith('ing')) stemmedWord = stemmedWord.slice(0, -3);
-        else if (stemmedWord.endsWith('s')) stemmedWord = stemmedWord.slice(0, -1);
+      
+      // Only apply stemming if word is not in the no-stem list and is long enough
+      if (stemmedWord.length > 3 && !noStemWords.has(stemmedWord)) {
+        // Improved stemming rules with better logic
+        if (stemmedWord.endsWith('ing')) {
+          // Handle -ing endings: running -> run, walking -> walk, being -> be
+          let root = stemmedWord.slice(0, -3);
+          if (root.length >= 2) {
+            stemmedWord = root;
+          }
+        }
+        else if (stemmedWord.endsWith('ies')) {
+          // Handle -ies endings: stories -> story, flies -> fly
+          stemmedWord = stemmedWord.slice(0, -3) + 'y';
+        }
+        else if (stemmedWord.endsWith('ied')) {
+          // Handle -ied endings: tried -> try, died -> die  
+          let root = stemmedWord.slice(0, -3);
+          if (root.endsWith('r') || root.endsWith('l')) {
+            stemmedWord = root + 'y'; // tried -> try, replied -> reply
+          } else {
+            stemmedWord = root + 'e'; // died -> die
+          }
+        }
+        else if (stemmedWord.endsWith('ed')) {
+          // Handle -ed endings more carefully
+          let root = stemmedWord.slice(0, -2);
+          if (root.length >= 2) {
+            // For words ending in consonant + 'ed', try adding 'e'
+            if (!root.match(/[aeiou]$/)) {
+              // lived -> live, moved -> move, etc.
+              if (root.match(/[^aeiou][aeiou][^aeiou]$/)) {
+                // Don't double the consonant for these
+                stemmedWord = root + 'e';
+              } else {
+                stemmedWord = root;
+              }
+            } else {
+              stemmedWord = root;
+            }
+          }
+        }
+        else if (stemmedWord.endsWith('es')) {
+          // Handle -es endings: churches -> church, boxes -> box
+          let root = stemmedWord.slice(0, -2);
+          if (root.endsWith('ch') || root.endsWith('sh') || root.endsWith('x') || root.endsWith('s')) {
+            stemmedWord = root;
+          } else {
+            // For words like "comes" -> "come"
+            stemmedWord = root + 'e';
+          }
+        }
+        else if (stemmedWord.endsWith('s') && stemmedWord.length > 4) {
+          // Handle simple plural -s endings: books -> book, cats -> cat
+          // But avoid stemming words like "was", "his", "yes", etc.
+          let root = stemmedWord.slice(0, -1);
+          if (!root.match(/[aeiou]s$/) && !['wa', 'hi', 'ye', 'thi'].includes(root)) {
+            stemmedWord = root;
+          }
+        }
       }
 
       // Check if the stemmed word is a stop word
@@ -128,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const match = tab.url.match(/bible\/(\d+)\/([A-Z]+)\.(\d+)\.([A-Z]+)/);
+      const match = tab.url.match(/bible\/(\d+)\/([A-Z0-9]+)\.(\d+)\.([A-Z]+)/);
       if (!match) {
         showStatus("Invalid Bible URL format", true);
         return;
@@ -175,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const match = tab.url.match(/bible\/(\d+)\/([A-Z]+)\.(\d+)\.([A-Z]+)/);
+      const match = tab.url.match(/bible\/(\d+)\/([A-Z0-9]+)\.(\d+)\.([A-Z]+)/);
       if (!match) {
         showStatus("Invalid Bible URL format", true);
         return;
@@ -208,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Extract details from the current URL
-      const match = tab.url.match(/bible\/(\d+)\/([A-Z]+)\.(\d+)\.([A-Z]+)/);
+      const match = tab.url.match(/bible\/(\d+)\/([A-Z0-9]+)\.(\d+)\.([A-Z]+)/);
       if (!match) {
         showStatus("❌ Invalid Bible URL format", true);
         return;
@@ -315,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus("Not a bible.com URL", true);
       return;
     }
-    const match = tab.url.match(/bible\/(\d+)\/([A-Z]+)\.(\d+)\.([A-Z]+)/);
+          const match = tab.url.match(/bible\/(\d+)\/([A-Z0-9]+)\.(\d+)\.([A-Z]+)/);
     if (!match) {
       showStatus("Invalid Bible URL format", true);
       return;
