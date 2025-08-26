@@ -79,10 +79,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let originalWordIndex = 0; // 1-based index for original word position
 
     // Words that should not be stemmed (common exceptions)
+    // Added more biblical and historical terms, especially those ending in -ed, to this list.
     const noStemWords = new Set([
-      'hundred', 'thousand', 'blessed', 'wicked', 'sacred', 'naked', 'beloved', 
+      'hundred', 'thousand', 'blessed', 'wicked', 'sacred', 'naked', 'beloved',
       'learned', 'kindred', 'aged', 'red', 'dead', 'bread', 'head', 'read',
-      'seed', 'feed', 'need', 'deed', 'creed', 'breed', 'freed', 'greed', 'replied'
+      'seed', 'feed', 'need', 'deed', 'creed', 'breed', 'freed', 'greed',
+      'entered', 'centered', 'altered', 'scattered', 'gathered', 'covered',
+      'delivered', 'remembered', 'numbered', 'ordered', 'answered', 'offered',
+      'suffered', 'wondered', 'considered', 'murdered', 'conquered', 'rendered',
+      'christ', 'jesus', 'gospel', 'prophet', 'apostle', 'salvation', 'righteous',
+      'covenant', 'sanctuary', 'pharisee', 'gentile', 'sabbath', 'hallelujah',
+      'revelation', 'messiah', 'jerusalem', 'galilee', 'judea', 'pharisees', 'gentiles',
+      // New additions for -ed endings
+      'anointed', 'crucified', 'redeemed', 'justified', 'sanctified', 'glorified',
+      'worshipped', 'commanded', 'baptized', 'persecuted', 'tempted', 'covenanted',
+      'fulfilled', 'prophesied', 'promised', 'ordained', 'resurrected'
     ]);
 
     words.forEach(word => {
@@ -117,16 +128,29 @@ document.addEventListener('DOMContentLoaded', () => {
           // Handle -ed endings more carefully
           let root = stemmedWord.slice(0, -2);
           if (root.length >= 2) {
-            // For words ending in consonant + 'ed', try adding 'e'
-            if (!root.match(/[aeiou]$/)) {
-              // lived -> live, moved -> move, etc.
-              if (root.match(/[^aeiou][aeiou][^aeiou]$/)) {
-                // Don't double the consonant for these
-                stemmedWord = root + 'e';
-              } else {
-                stemmedWord = root;
-              }
-            } else {
+            // Special cases for double consonants: stopped -> stop, planned -> plan
+            if (root.length >= 3 && root[root.length-1] === root[root.length-2] && 
+                root.match(/[bcdfghjklmnpqrstvwxz]$/)) {
+              stemmedWord = root.slice(0, -1); // Remove one of the double consonants
+            }
+            // Words ending in 'r': entered -> enter, offered -> offer
+            else if (root.endsWith('r')) {
+              stemmedWord = root;
+            }
+            // Words ending in consonant + 'e': lived -> live, moved -> move  
+            else if (root.match(/[bcdfghjklmnpqrstvwxz]e$/)) {
+              stemmedWord = root;
+            }
+            // Words ending in 'y': obeyed -> obey, played -> play
+            else if (root.endsWith('y')) {
+              stemmedWord = root;
+            }
+            // Words ending in vowel: agreed -> agree, freed -> free
+            else if (root.match(/[aeiou]$/)) {
+              stemmedWord = root;
+            }
+            // Default case for other consonant endings: walked -> walk, jumped -> jump
+            else {
               stemmedWord = root;
             }
           }
