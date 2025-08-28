@@ -79,21 +79,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let originalWordIndex = 0; // 1-based index for original word position
 
     // Words that should not be stemmed (common exceptions)
-    // Added more biblical and historical terms, especially those ending in -ed, to this list.
     const noStemWords = new Set([
-      'hundred', 'thousand', 'blessed', 'wicked', 'sacred', 'naked', 'beloved',
+      'hundred', 'thousand', 'blessed', 'wicked', 'sacred', 'naked', 'beloved', 
       'learned', 'kindred', 'aged', 'red', 'dead', 'bread', 'head', 'read',
       'seed', 'feed', 'need', 'deed', 'creed', 'breed', 'freed', 'greed',
       'entered', 'centered', 'altered', 'scattered', 'gathered', 'covered',
       'delivered', 'remembered', 'numbered', 'ordered', 'answered', 'offered',
-      'suffered', 'wondered', 'considered', 'murdered', 'conquered', 'rendered',
-      'christ', 'jesus', 'gospel', 'prophet', 'apostle', 'salvation', 'righteous',
-      'covenant', 'sanctuary', 'pharisee', 'gentile', 'sabbath', 'hallelujah',
-      'revelation', 'messiah', 'jerusalem', 'galilee', 'judea', 'pharisees', 'gentiles',
-      // New additions for -ed endings
-      'anointed', 'crucified', 'redeemed', 'justified', 'sanctified', 'glorified',
-      'worshipped', 'commanded', 'baptized', 'persecuted', 'tempted', 'covenanted',
-      'fulfilled', 'prophesied', 'promised', 'ordained', 'resurrected'
+      'suffered', 'wondered', 'considered', 'murdered', 'conquered', 'rendered'
     ]);
 
     words.forEach(word => {
