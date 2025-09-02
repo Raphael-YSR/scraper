@@ -111,6 +111,59 @@
             min-width: 120px;
         }
 
+        #extractFullBook {
+            padding: 10px 20px;
+            font-size: 13px;
+            min-width: 180px;
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+        }
+
+        #extractFullBook:hover {
+            background: linear-gradient(45deg, #f7931e, #ff6b35);
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        .progress-container {
+            width: 100%;
+            text-align: center;
+        }
+
+        .progress-text {
+            color: #00ff7f;
+            font-size: 12px;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #00ff7f, #00cc66);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        #cancelExtraction {
+            padding: 6px 12px;
+            font-size: 11px;
+            background: linear-gradient(45deg, #ff4757, #ff3742);
+            box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3);
+        }
+
+        #cancelExtraction:hover {
+            background: linear-gradient(45deg, #ff3742, #ff4757);
+            box-shadow: 0 6px 20px rgba(255, 71, 87, 0.4);
+        }
+
         button::before {
             content: '';
             position: absolute;
@@ -199,7 +252,16 @@
             <button id="extract">EXTRACT</button>
             <button id="nextChapter">&rarr;</button>
         </div>
+        <button id="extractFullBook">EXTRACT FULL BOOK</button>
         <button id="chapter1">Chapter 1</button>
+        
+        <div class="progress-container" id="progressContainer" style="display: none;">
+            <div class="progress-text" id="progressText">Extracting...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <button id="cancelExtraction">CANCEL</button>
+        </div>
         <div class="status" id="status"></div>
     </div>
 </body>

@@ -1,9 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
   const statusEl = document.getElementById('status');
   const extractButton = document.getElementById('extract');
+  const extractFullBookButton = document.getElementById('extractFullBook');
   const prevChapterButton = document.getElementById('prevChapter');
   const nextChapterButton = document.getElementById('nextChapter');
   const chapter1Button = document.getElementById('chapter1');
+  const progressContainer = document.getElementById('progressContainer');
+  const progressText = document.getElementById('progressText');
+  const progressFill = document.getElementById('progressFill');
+  const cancelButton = document.getElementById('cancelExtraction');
 
   // Translation navigation buttons
   const navKJV = document.getElementById('navKJV');
@@ -13,11 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const navAMPC = document.getElementById('navAMPC');
   const navTPT = document.getElementById('navTPT');
   const navESV = document.getElementById('navESV');
-  const navNLT = document.getElementById('navNLT'); // Added NLT button reference
+  const navNLT = document.getElementById('navNLT');
 
+  // Global variable to track extraction cancellation
+  let extractionCancelled = false;
 
   // Hardcoded data for books and chapter counts (consistent with frontend)
-  // This map will be used to navigate chapters and identify book IDs.
   const bookAbbreviationToIdMap = {
     "GEN": 1, "EXO": 2, "LEV": 3, "NUM": 4, "DEU": 5, "JOS": 6, "JDG": 7, "RUT": 8,
     "1SA": 9, "2SA": 10, "1KI": 11, "2KI": 12, "1CH": 13, "2CH": 14, "EZR": 15, "NEH": 16,
@@ -54,31 +60,91 @@ document.addEventListener('DOMContentLoaded', () => {
     "very", "can", "will", "just", "don't", "should", "now", "here", "there", "has", "have", "had",
     "do", "does", "did", "am", "are", "is", "was", "were", "been", "being", "may", "might", "must",
     "ought", "shall", "should", "would", "could"
-    // This list can be expanded for more comprehensive stop word removal.
   ]);
 
   /**
+   * Waits for a specified amount of time
+   * @param {number} ms Milliseconds to wait
+   */
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Waits for the page to load and verses to be available
+   * @param {number} tabId The tab ID to check
+   * @param {number} maxAttempts Maximum number of attempts
+   */
+  async function waitForPageLoad(tabId, maxAttempts = 10) {
+    for (let i = 0; i < maxAttempts; i++) {
+      if (extractionCancelled) throw new Error('Extraction cancelled');
+      
+      try {
+        const response = await chrome.tabs.sendMessage(tabId, { action: "checkPageLoaded" });
+        if (response && response.loaded) {
+          return true;
+        }
+      } catch (error) {
+        // Page might not be ready for content script injection yet
+      }
+      await delay(1000); // Wait 1 second between checks
+    }
+    throw new Error('Page load timeout');
+  }
+
+  /**
+   * Extracts verses from a single chapter
+   * @param {number} tabId The tab ID
+   */
+  async function extractSingleChapter(tabId) {
+    const response = await chrome.tabs.sendMessage(tabId, { action: "extractVerses" });
+    return response.verses || [];
+  }
+
+  /**
+   * Updates the progress display
+   * @param {number} current Current chapter number
+   * @param {number} total Total chapters
+   * @param {string} bookName Book name
+   */
+  function updateProgress(current, total, bookName) {
+    const percentage = (current / total) * 100;
+    progressText.textContent = `Extracting ${bookName} ${current}/${total}...`;
+    progressFill.style.width = `${percentage}%`;
+  }
+
+  /**
+   * Shows/hides the progress container and buttons
+   * @param {boolean} show Whether to show progress
+   */
+  function toggleProgressDisplay(show) {
+    if (show) {
+      progressContainer.style.display = 'block';
+      extractButton.style.display = 'none';
+      extractFullBookButton.style.display = 'none';
+      prevChapterButton.style.display = 'none';
+      nextChapterButton.style.display = 'none';
+      chapter1Button.style.display = 'none';
+    } else {
+      progressContainer.style.display = 'none';
+      extractButton.style.display = 'block';
+      extractFullBookButton.style.display = 'block';
+      prevChapterButton.style.display = 'block';
+      nextChapterButton.style.display = 'block';
+      chapter1Button.style.display = 'block';
+    }
+  }
+
+  /**
    * Generates a simplified PostgreSQL tsvector-like string from raw text.
-   * This function attempts to mimic tokenization, lowercasing, punctuation removal,
-   * stop word removal, and positional information as seen in PostgreSQL's tsvector.
-   * A highly simplified stemming is applied for common endings.
-   *
-   * @param {string} text The raw verse text.
-   * @returns {string} The formatted tsvector-like string.
    */
   function generateTsVectorString(text) {
-    // 1. Lowercase and remove punctuation (keep apostrophes for contractions if necessary, but generally removed for tsvector)
-    // Remove all characters that are not letters, numbers, or spaces.
     const cleanedText = text.toLowerCase().replace(/[^a-z0-9\s]/g, '');
-
-    // 2. Split into words and track original positions
-    // filter(word => word.length > 0) removes empty strings from multiple spaces
     const words = cleanedText.split(/\s+/).filter(word => word.length > 0);
 
     const tsvectorParts = [];
-    let originalWordIndex = 0; // 1-based index for original word position
+    let originalWordIndex = 0;
 
-    // Words that should not be stemmed (common exceptions)
     const noStemWords = new Set([
       'hundred', 'thousand', 'blessed', 'wicked', 'sacred', 'naked', 'beloved', 
       'learned', 'kindred', 'aged', 'red', 'dead', 'bread', 'head', 'read',
@@ -89,77 +155,61 @@ document.addEventListener('DOMContentLoaded', () => {
     ]);
 
     words.forEach(word => {
-      originalWordIndex++; // Increment for each word in the original text
+      originalWordIndex++;
 
       let stemmedWord = word;
       
-      // Only apply stemming if word is not in the no-stem list and is long enough
       if (stemmedWord.length > 3 && !noStemWords.has(stemmedWord)) {
-        // Improved stemming rules with better logic
         if (stemmedWord.endsWith('ing')) {
-          // Handle -ing endings: running -> run, walking -> walk, being -> be
           let root = stemmedWord.slice(0, -3);
           if (root.length >= 2) {
             stemmedWord = root;
           }
         }
         else if (stemmedWord.endsWith('ies')) {
-          // Handle -ies endings: stories -> story, flies -> fly
           stemmedWord = stemmedWord.slice(0, -3) + 'y';
         }
         else if (stemmedWord.endsWith('ied')) {
-          // Handle -ied endings: tried -> try, died -> die  
           let root = stemmedWord.slice(0, -3);
           if (root.endsWith('r') || root.endsWith('l')) {
-            stemmedWord = root + 'y'; // tried -> try, replied -> reply
+            stemmedWord = root + 'y';
           } else {
-            stemmedWord = root + 'e'; // died -> die
+            stemmedWord = root + 'e';
           }
         }
         else if (stemmedWord.endsWith('ed')) {
-          // Handle -ed endings more carefully
           let root = stemmedWord.slice(0, -2);
           if (root.length >= 2) {
-            // Special cases for double consonants: stopped -> stop, planned -> plan
             if (root.length >= 3 && root[root.length-1] === root[root.length-2] && 
                 root.match(/[bcdfghjklmnpqrstvwxz]$/)) {
-              stemmedWord = root.slice(0, -1); // Remove one of the double consonants
+              stemmedWord = root.slice(0, -1);
             }
-            // Words ending in 'r': entered -> enter, offered -> offer
             else if (root.endsWith('r')) {
               stemmedWord = root;
             }
-            // Words ending in consonant + 'e': lived -> live, moved -> move  
             else if (root.match(/[bcdfghjklmnpqrstvwxz]e$/)) {
               stemmedWord = root;
             }
-            // Words ending in 'y': obeyed -> obey, played -> play
             else if (root.endsWith('y')) {
               stemmedWord = root;
             }
-            // Words ending in vowel: agreed -> agree, freed -> free
             else if (root.match(/[aeiou]$/)) {
               stemmedWord = root;
             }
-            // Default case for other consonant endings: walked -> walk, jumped -> jump
             else {
               stemmedWord = root;
             }
           }
         }
         else if (stemmedWord.endsWith('es')) {
-          // Handle -es endings: churches -> church, boxes -> box
           let root = stemmedWord.slice(0, -2);
           if (root.endsWith('ch') || root.endsWith('sh') || root.endsWith('x') || root.endsWith('s')) {
             stemmedWord = root;
           } else {
-            // For words like "comes" -> "come"
             stemmedWord = root + 'e';
           }
         }
         else if (stemmedWord.endsWith('s') && stemmedWord.length > 4) {
-          // Handle simple plural -s endings: books -> book, cats -> cat
-          // But avoid stemming words like "was", "his", "yes", etc.
           let root = stemmedWord.slice(0, -1);
           if (!root.match(/[aeiou]s$/) && !['wa', 'hi', 'ye', 'thi'].includes(root)) {
             stemmedWord = root;
@@ -167,9 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // Check if the stemmed word is a stop word
       if (!stopWords.has(stemmedWord)) {
-        // Add to tsvector parts, ensuring word is quoted and position is included
         tsvectorParts.push(`'${stemmedWord}':${originalWordIndex}`);
       }
     });
@@ -177,23 +225,170 @@ document.addEventListener('DOMContentLoaded', () => {
     return tsvectorParts.join(' ');
   }
 
+  /**
+   * Main function to extract all verses from the current book
+   */
+  async function extractFullBook() {
+    extractionCancelled = false;
+    toggleProgressDisplay(true);
+    
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab.url || !tab.url.includes("bible.com")) {
+        showStatus("Not a bible.com URL", true);
+        return;
+      }
+
+      const match = tab.url.match(/bible\/(\d+)\/([A-Z0-9]+)\.(\d+)\.([A-Z]+)/);
+      if (!match) {
+        showStatus("Invalid Bible URL format", true);
+        return;
+      }
+
+      const [_, translationCode, bookCode, currentChapter, version] = match;
+      const totalChapters = bookChapterCounts[bookCode];
+
+      if (!totalChapters) {
+        showStatus(`Unknown book: ${bookCode}`, true);
+        return;
+      }
+
+      // Load required data
+      const [booksRes, allBooksRes, translationsRes] = await Promise.all([
+        fetch(chrome.runtime.getURL("books.json")),
+        fetch(chrome.runtime.getURL("all_books.json")),
+        fetch(chrome.runtime.getURL("translations.json"))
+      ]);
+
+      const booksFullNames = await booksRes.json();
+      const allBooks = await allBooksRes.json();
+      const internalTranslationsMap = await translationsRes.json();
+
+      const bookName = booksFullNames[bookCode];
+      const translationIdForCsv = internalTranslationsMap[version];
+      const bookData = allBooks.find(book => book.name === bookName);
+
+      if (!bookName || typeof translationIdForCsv === 'undefined' || !bookData) {
+        showStatus("Missing book or translation data", true);
+        return;
+      }
+
+      // Start extraction from chapter 1
+      await navigateToChapter(1);
+      await delay(2000);
+
+      const allVerses = [];
+      const failedChapters = [];
+
+      // Extract each chapter
+      for (let chapter = 1; chapter <= totalChapters; chapter++) {
+        if (extractionCancelled) {
+          showStatus("Extraction cancelled", true);
+          return;
+        }
+
+        updateProgress(chapter, totalChapters, bookName);
+
+        try {
+          // Wait for page to load
+          await waitForPageLoad(tab.id);
+
+          // Extract verses from current chapter
+          const verses = await extractSingleChapter(tab.id);
+
+          if (verses && verses.length > 0) {
+            // Add chapter context and process verses
+            verses.forEach(verse => {
+              const normalizedText = verse.verseText.trim().replace(/\s+/g, ' ');
+              const cleanedVerseText = normalizedText
+                .replace(/"/g, '"')
+                .replace(/"/g, '"')
+                .replace(/'/g, "'")
+                .replace(/'/g, "'");
+              const escapedText = cleanedVerseText.replace(/"/g, '""');
+              const wordCount = normalizedText.split(/\s+/).filter(word => word.length > 0).length;
+              const searchableText = generateTsVectorString(normalizedText);
+
+              allVerses.push({
+                translationId: translationIdForCsv,
+                bookId: bookData.bookid,
+                chapterNumber: chapter,
+                verseNumber: verse.verseNumber,
+                verseText: escapedText,
+                searchableText: searchableText,
+                wordCount: wordCount
+              });
+            });
+          } else {
+            failedChapters.push(chapter);
+          }
+
+          // Navigate to next chapter (except for the last one)
+          if (chapter < totalChapters) {
+            await navigateToChapter(chapter + 1);
+            await delay(2500);
+          }
+
+        } catch (error) {
+          console.error(`Error extracting chapter ${chapter}:`, error);
+          failedChapters.push(chapter);
+          
+          // Try to continue with next chapter
+          if (chapter < totalChapters) {
+            try {
+              await navigateToChapter(chapter + 1);
+              await delay(2500);
+            } catch (navError) {
+              console.error(`Failed to navigate to chapter ${chapter + 1}`);
+            }
+          }
+        }
+      }
+
+      if (allVerses.length > 0) {
+        // Generate CSV
+        let csvContent = `translationid,bookid,chapternumber,versenumber,versetext,versetextsearchable,hasfootnotes,wordcount\n`;
+        
+        allVerses.forEach(verse => {
+          csvContent += `${verse.translationId},${verse.bookId},${verse.chapterNumber},${verse.verseNumber},"${verse.verseText}","${verse.searchableText}",f,${verse.wordCount}\n`;
+        });
+
+        // Download CSV
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+
+        chrome.downloads.download({
+          url,
+          filename: `verses_${bookName.replace(/\s+/g, '_')}_${version}_complete.csv`,
+        });
+
+        const successMsg = `✅ Extracted ${allVerses.length} verses from ${bookName}`;
+        const failMsg = failedChapters.length > 0 ? ` (Failed: chapters ${failedChapters.join(', ')})` : '';
+        showStatus(successMsg + failMsg);
+      } else {
+        showStatus("❌ No verses extracted", true);
+      }
+
+    } catch (error) {
+      showStatus(`❌ Extraction failed: ${error.message}`, true);
+      console.error('Full book extraction error:', error);
+    } finally {
+      toggleProgressDisplay(false);
+    }
+  }
 
   /**
    * Displays a status message in the popup.
-   * @param {string} message The message to display.
-   * @param {boolean} isError True if the message is an error, false otherwise.
    */
   function showStatus(message, isError = false) {
     statusEl.textContent = message;
     statusEl.style.color = isError ? '#ff6b6b' : '#00ff7f';
     statusEl.classList.add('show');
-    // Hide status message after 3 seconds
     setTimeout(() => statusEl.classList.remove('show'), 3000);
   }
 
   /**
    * Navigates the active tab to a new chapter URL on bible.com.
-   * @param {number} newChapter The chapter number to navigate to.
    */
   async function navigateToChapter(newChapter) {
     try {
@@ -217,7 +412,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Prevent navigation beyond valid chapter range
       if (newChapter < 1) {
         showStatus("Already at the first chapter.", false);
         return;
@@ -227,7 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Construct the new URL and update the tab
       const newUrl = `https://www.bible.com/bible/${translationId}/${bookAbbreviation}.${newChapter}.${versionAbbreviation}`;
       await chrome.tabs.update(tab.id, { url: newUrl });
       showStatus(`Navigating to chapter ${newChapter}...`);
@@ -239,8 +432,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Navigates the active tab to a new translation URL on bible.com.
-   * @param {number} newTranslationId The translation ID to navigate to (from browserversion.json).
-   * @param {string} newTranslationAbbr The translation abbreviation (e.g., "KJV", "NIV").
    */
   async function navigateToTranslation(newTranslationId, newTranslationAbbr) {
     try {
@@ -258,7 +449,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const [_, currentTranslationId, bookAbbreviation, currentChapter, currentVersionAbbreviation] = match;
 
-      // Construct the new URL with the desired translation ID and abbreviation
       const newUrl = `https://www.bible.com/bible/${newTranslationId}/${bookAbbreviation}.${currentChapter}.${newTranslationAbbr}`;
       await chrome.tabs.update(tab.id, { url: newUrl });
       showStatus(`Switching to ${newTranslationAbbr}...`);
@@ -268,12 +458,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-
   // --- Event Listeners ---
+
+  // Event listener for the "Extract Full Book" button
+  extractFullBookButton.addEventListener('click', extractFullBook);
+
+  // Event listener for the cancel button
+  cancelButton.addEventListener('click', () => {
+    extractionCancelled = true;
+    toggleProgressDisplay(false);
+    showStatus("Extraction cancelled", false);
+  });
 
   // Event listener for the main "Extract Verses" button
   extractButton.addEventListener('click', async () => {
-    extractButton.disabled = true; // Disable button during processing
+    extractButton.disabled = true;
     extractButton.textContent = 'PROCESSING...';
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -282,32 +481,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Extract details from the current URL
       const match = tab.url.match(/bible\/(\d+)\/([A-Z0-9]+)\.(\d+)\.([A-Z]+)/);
       if (!match) {
         showStatus("❌ Invalid Bible URL format", true);
         return;
       }
 
-      // Destructure matched URL components
       const [_, translationCode, bookCode, chapter, version] = match;
 
-      // Load book full names and IDs from local JSON files
-      const booksJsonRes = await fetch(chrome.runtime.getURL("books.json")); // Abbreviation to full name map
+      const booksJsonRes = await fetch(chrome.runtime.getURL("books.json"));
       const booksFullNames = await booksJsonRes.json();
 
-      const allBooksRes = await fetch(chrome.runtime.getURL("all_books.json")); // Array of {bookid, name}
+      const allBooksRes = await fetch(chrome.runtime.getURL("all_books.json"));
       const allBooks = await allBooksRes.json();
 
-      // Load internal translation mappings (abbreviation to ID for CSV export)
       const translationsRes = await fetch(chrome.runtime.getURL("translations.json"));
       const internalTranslationsMap = await translationsRes.json();
 
-      const bookName = booksFullNames[bookCode]; // e.g., "Genesis" from "GEN"
-      // Use internal translation ID for CSV export purposes
+      const bookName = booksFullNames[bookCode];
       const translationIdForCsv = internalTranslationsMap[version];
 
-      // Validate loaded data
       if (!bookName) {
         showStatus(`❌ Unknown book abbreviation: ${bookCode}`, true);
         return;
@@ -317,7 +510,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Find the bookid from allBooks using the full book name
       const bookData = allBooks.find(book => book.name === bookName);
 
       if (!bookData) {
@@ -325,43 +517,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Send message to content script to extract verses from the current page
       const response = await chrome.tabs.sendMessage(tab.id, { action: "extractVerses" });
       const extractedVerses = response.verses;
 
-      // Define the CSV header matching your PostgreSQL `verses` table structure (excluding auto-generated columns)
-      // The 'md.md' sample indicates these columns for COPY.
       let csvContent = `translationid,bookid,chapternumber,versenumber,versetext,versetextsearchable,hasfootnotes,wordcount\n`;
 
       if (extractedVerses && extractedVerses.length > 0) {
         extractedVerses.forEach(verse => {
-          // Normalize whitespace: replace multiple spaces with single space and trim
           const normalizedText = verse.verseText.trim().replace(/\s+/g, ' ');
 
-          // Step 1: Replace smart quotes with standard double quotes for consistency
           let cleanedVerseText = normalizedText
             .replace(/"/g, '"')
             .replace(/"/g, '"')
             .replace(/'/g, "'")
             .replace(/'/g, "'");
 
-          // Step 2: Escape any standard double quotes within the text by doubling them for CSV
-          // This is crucial for CSV compliance when text contains commas or quotes.
           const escapedText = cleanedVerseText.replace(/"/g, '""');
-
-          // Calculate word count based on the normalized text
           const wordCount = normalizedText.split(/\s+/).filter(word => word.length > 0).length;
-
-          // Generate the searchable text in tsvector-like format
           const searchableText = generateTsVectorString(normalizedText);
 
-          // Append verse data to CSV content
-          // 'f' is used for false in PostgreSQL boolean type for CSV import.
           csvContent += `${translationIdForCsv},${bookData.bookid},${chapter},${verse.verseNumber},"${escapedText}","${searchableText}",f,${wordCount}\n`;
         });
 
-        // Create a Blob from the CSV content and initiate download
-        // IMPORTANT: Explicitly set charset to 'utf-8' to prevent encoding issues
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
 
@@ -378,8 +555,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus("❌ Extraction failed", true);
       console.error('Error:', error);
     } finally {
-      extractButton.disabled = false; // Re-enable button
-      extractButton.textContent = 'EXTRACT'; // Reset button text
+      extractButton.disabled = false;
+      extractButton.textContent = 'EXTRACT';
     }
   });
 
@@ -390,13 +567,13 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus("Not a bible.com URL", true);
       return;
     }
-          const match = tab.url.match(/bible\/(\d+)\/([A-Z0-9]+)\.(\d+)\.([A-Z]+)/);
+    const match = tab.url.match(/bible\/(\d+)\/([A-Z0-9]+)\.(\d+)\.([A-Z]+)/);
     if (!match) {
       showStatus("Invalid Bible URL format", true);
       return;
     }
-    const [_, , , currentChapter] = match; // Extract current chapter
-    navigateToChapter(parseInt(currentChapter) - 1); // Navigate to previous chapter
+    const [_, , , currentChapter] = match;
+    navigateToChapter(parseInt(currentChapter) - 1);
   });
 
   // Event listener for "Next Chapter" button
@@ -411,38 +588,29 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus("Invalid Bible URL format", true);
       return;
     }
-    const [_, , , currentChapter] = match; // Extract current chapter
-    navigateToChapter(parseInt(currentChapter) + 1); // Navigate to next chapter
+    const [_, , , currentChapter] = match;
+    navigateToChapter(parseInt(currentChapter) + 1);
   });
 
   // Event listener for "Chapter 1" button
   chapter1Button.addEventListener('click', () => {
-    navigateToChapter(1); // Navigate directly to chapter 1
+    navigateToChapter(1);
   });
 
   // Event listeners for translation buttons
-  // Fetch browser-specific translation map for navigation
   let browserTranslationsMap;
   fetch(chrome.runtime.getURL("browserversion.json"))
     .then(response => response.json())
     .then(data => {
       browserTranslationsMap = data;
 
-      // KJV button
       navKJV.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["KJV"], "KJV"));
-      // NIV button
       navNIV.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["NIV"], "NIV"));
-      // NKJV button
       navNKJV.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["NKJV"], "NKJV"));
-      // AMP button
       navAMP.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["AMP"], "AMP"));
-      // AMPC button
       navAMPC.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["AMPC"], "AMPC"));
-      // TPT button
       navTPT.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["TPT"], "TPT"));
-      // ESV button
       navESV.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["ESV"], "ESV"));
-      // NLT button - Added event listener for NLT
       navNLT.addEventListener('click', () => navigateToTranslation(browserTranslationsMap["NLT"], "NLT"));
     })
     .catch(error => {

@@ -135,5 +135,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log(`Extracted ${verses.length} verses:`, verses);
         sendResponse({ verses: verses });
         return true;
+    } else if (request.action === "checkPageLoaded") {
+        // Simple check to see if the page has loaded and verses are available
+        const verseElements = document.querySelectorAll('span[data-usfm], span.ChapterContent_verse__57FIw');
+        sendResponse({ loaded: verseElements.length > 0 });
+        return true;
     }
 });
