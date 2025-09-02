@@ -10,8 +10,8 @@
         }
 
         body {
-            width: 320px; /* Increased width to accommodate 4 columns */
-            height: 420px; /* Slightly increased height */
+            width: 320px;
+            height: 420px;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
             color: #e0e6ed;
@@ -37,196 +37,109 @@
 
         .container {
             height: 100%;
+            width: 100%;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             position: relative;
-            z-index: 2;
-            gap: 15px;
+            z-index: 1;
         }
 
         .logo {
             font-size: 24px;
             font-weight: bold;
-            color: #00ff7f;
-            text-shadow: 0 0 10px rgba(0, 255, 127, 0.5);
-            letter-spacing: 2px;
+            color: #4CAF50; /* A nice green color */
+            text-shadow: 0 0 5px #4CAF50, 0 0 10px #4CAF50;
+            margin-bottom: 5px;
         }
-
+        
         .subtitle {
-            font-size: 11px;
-            color: #9ca3af;
+            font-size: 12px;
+            color: #a0a0a0;
+            margin-bottom: 20px;
             text-align: center;
-            opacity: 0.8;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
         }
 
         .translation-buttons {
             display: grid;
-            grid-template-columns: repeat(4, 1fr); /* Changed to 4 columns for 8 buttons */
-            grid-template-rows: repeat(2, 1fr); /* 2 rows for 8 buttons */
-            gap: 8px;
-            margin-bottom: 15px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .translation-buttons button {
             width: 100%;
-            max-width: 300px;
         }
 
         .button-group {
             display: flex;
             gap: 10px;
+            width: 100%;
+            justify-content: center;
             margin-bottom: 10px;
         }
 
         button {
-            background: linear-gradient(45deg, #00ff7f, #00cc66);
-            border: none;
-            color: #0a0a0a;
-            padding: 8px 12px;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            font-weight: bold;
-            border-radius: 6px;
+            background-color: #333;
+            color: #00ff8c;
+            border: 2px solid #00ff8c;
+            padding: 10px 15px;
+            font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
             cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 4px 15px rgba(0, 255, 127, 0.3);
-            position: relative;
-            overflow: hidden;
-            min-width: 50px;
-            text-align: center;
-        }
-
-        .translation-buttons button {
-            padding: 6px 8px; /* Slightly smaller padding for 4-column layout */
-            font-size: 10px; /* Smaller font for better fit */
-            min-width: 45px; /* Adjusted min-width */
-        }
-
-        #extract {
-            padding: 10px 20px;
+            border-radius: 5px;
+            transition: all 0.2s ease-in-out;
             font-size: 14px;
-            min-width: 120px;
+            text-shadow: 0 0 5px #00ff8c;
+        }
+        
+        button:hover {
+            background-color: #00ff8c;
+            color: #1a1a2e;
+            box-shadow: 0 0 10px #00ff8c, 0 0 20px #00ff8c;
+        }
+        
+        button:active {
+            transform: scale(0.95);
         }
 
-        #extractFullBook {
-            padding: 10px 20px;
-            font-size: 13px;
-            min-width: 180px;
-            background: linear-gradient(45deg, #ff6b35, #f7931e);
-            box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
-        }
-
-        #extractFullBook:hover {
-            background: linear-gradient(45deg, #f7931e, #ff6b35);
-            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        #extractFullBook, #chapter1 {
+            width: calc(100% - 20px);
+            margin: 0 auto 10px;
         }
 
         .progress-container {
-            width: 100%;
-            text-align: center;
-        }
-
-        .progress-text {
-            color: #00ff7f;
-            font-size: 12px;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
+            position: relative;
+            width: 90%;
+            height: 20px;
+            background-color: #2c2c44;
+            border: 1px solid #4CAF50;
+            border-radius: 10px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-top: 20px;
         }
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(45deg, #00ff7f, #00cc66);
-            width: 0%;
+            background-color: #4CAF50;
             transition: width 0.3s ease;
         }
 
-        #cancelExtraction {
-            padding: 6px 12px;
-            font-size: 11px;
-            background: linear-gradient(45deg, #ff4757, #ff3742);
-            box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3);
-        }
-
-        #cancelExtraction:hover {
-            background: linear-gradient(45deg, #ff3742, #ff4757);
-            box-shadow: 0 6px 20px rgba(255, 71, 87, 0.4);
-        }
-
-        button::before {
-            content: '';
+        .progress-text {
             position: absolute;
-            top: 0;
-            left: -100%;
             width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-            transition: left 0.5s;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 255, 127, 0.4);
-            background: linear-gradient(45deg, #00cc66, #00ff7f);
-        }
-
-        button:hover::before {
-            left: 100%;
-        }
-
-        button:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 10px rgba(0, 255, 127, 0.3);
-        }
-
-        button:disabled {
-            background: #4a5568;
-            cursor: not-allowed;
-            box-shadow: none;
-            transform: none;
-            opacity: 0.7;
-        }
-
-        .status {
-            position: absolute;
-            bottom: 5px;
-            left: 20px;
-            right: 20px;
             text-align: center;
-            font-size: 10px;
-            color: #6b7280;
-            opacity: 0;
-            transition: opacity 0.3s ease;
+            line-height: 20px;
+            color: #fff;
+            text-shadow: 1px 1px 2px #000;
         }
 
-        .status.show {
-            opacity: 1;
+        #status {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #a0a0a0;
         }
 
-        .grid-bg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-image:
-                linear-gradient(rgba(0, 255, 127, 0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 127, 0.1) 1px, transparent 1px);
-            background-size: 20px 20px;
-            opacity: 0.3;
-            z-index: 1;
-        }
     </style>
     <script src="popup.js" defer></script>
 </head>
@@ -257,12 +170,11 @@
         
         <div class="progress-container" id="progressContainer" style="display: none;">
             <div class="progress-text" id="progressText">Extracting...</div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-            <button id="cancelExtraction">CANCEL</button>
+            <div class="progress-fill" id="progressFill"></div>
         </div>
-        <div class="status" id="status"></div>
+
+        <button id="cancelExtraction" style="display: none; margin-top: 10px;">Cancel</button>
+        <div id="status"></div>
     </div>
 </body>
 </html>

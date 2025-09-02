@@ -4,7 +4,10 @@
   "version": "1.0",
   "description": "Extract Bible verses from bible.com and save as PostgreSQL-ready CSV",
   "permissions": [
-    "activeTab", "downloads", "tabs", "scripting"
+    "activeTab", 
+    "downloads", 
+    "tabs", 
+    "scripting"
   ],
   "host_permissions": [
     "https://www.bible.com/*"
@@ -15,7 +18,8 @@
   "content_scripts": [
     {
       "matches": ["https://www.bible.com/*"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_end"
     }
   ],
   "action": {
@@ -29,7 +33,8 @@
       "resources": [
         "books.json",
         "translations.json",
-        "all_books.json"
+        "all_books.json",
+        "browserversion.json"
       ],
       "matches": ["<all_urls>"]
     }
