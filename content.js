@@ -1,4 +1,4 @@
-// content.js - Simplified and fixed version
+// content.js - Fixed version with proper verse consolidation and footnote handling
 
 (function() {
     'use strict';
@@ -10,57 +10,62 @@
         const verses = [];
         
         try {
-            // Method 1: Try to find verses with data-usfm attributes
+            // Method 1: Try to find verses with data-usfm attributes (primary method)
             const verseElements = document.querySelectorAll('span[data-usfm]');
             
             if (verseElements.length > 0) {
                 console.log(`Found ${verseElements.length} verse elements with data-usfm`);
                 
-                let currentVerse = null;
-                let currentText = "";
+                const verseMap = new Map(); // To consolidate verses by number
+                let hasFootnotes = false;
                 
-                verseElements.forEach((element, index) => {
+                verseElements.forEach((element) => {
                     const usfmAttr = element.getAttribute('data-usfm');
                     
                     if (usfmAttr && usfmAttr.includes('.')) {
                         const parts = usfmAttr.split('.');
                         if (parts.length >= 3) {
-                            // This is a verse start
-                            if (currentVerse !== null && currentText.trim()) {
-                                verses.push({
-                                    verseNumber: currentVerse,
-                                    verseText: currentText.trim().replace(/\s+/g, ' ')
-                                });
+                            const verseNumber = parts[parts.length - 1];
+                            
+                            // Get text content, excluding footnotes and verse numbers
+                            const clonedElement = element.cloneNode(true);
+                            
+                            // Remove verse number labels
+                            const labels = clonedElement.querySelectorAll('span.ChapterContent_label__R2PLt, .verse-num, .v-num');
+                            labels.forEach(label => label.remove());
+                            
+                            // Check for footnotes before removing them
+                            const footnotes = clonedElement.querySelectorAll('span.ChapterContent_note__YlDW0, .note, .footnote');
+                            if (footnotes.length > 0) {
+                                hasFootnotes = true;
+                                footnotes.forEach(footnote => footnote.remove());
                             }
-                            currentVerse = parts[parts.length - 1];
-                            currentText = "";
+                            
+                            const text = clonedElement.textContent.trim();
+                            if (text) {
+                                // Consolidate text by verse number
+                                if (verseMap.has(verseNumber)) {
+                                    const existingText = verseMap.get(verseNumber);
+                                    verseMap.set(verseNumber, existingText + ' ' + text);
+                                } else {
+                                    verseMap.set(verseNumber, text);
+                                }
+                            }
                         }
                     }
-                    
-                    // Get text content, excluding footnotes and verse numbers
-                    const clonedElement = element.cloneNode(true);
-                    
-                    // Remove verse number labels
-                    const labels = clonedElement.querySelectorAll('span.ChapterContent_label__R2PLt, .verse-num, .v-num');
-                    labels.forEach(label => label.remove());
-                    
-                    // Remove footnotes
-                    const footnotes = clonedElement.querySelectorAll('span.ChapterContent_note__YlDW0, .note, .footnote');
-                    footnotes.forEach(footnote => footnote.remove());
-                    
-                    const text = clonedElement.textContent.trim();
-                    if (text) {
-                        currentText += " " + text;
-                    }
-                    
-                    // If this is the last element, don't forget to add the verse
-                    if (index === verseElements.length - 1 && currentVerse && currentText.trim()) {
-                        verses.push({
-                            verseNumber: currentVerse,
-                            verseText: currentText.trim().replace(/\s+/g, ' ')
-                        });
-                    }
                 });
+                
+                // Convert map to verses array
+                verseMap.forEach((text, verseNumber) => {
+                    verses.push({
+                        verseNumber: verseNumber,
+                        verseText: text.replace(/\s+/g, ' ').trim(),
+                        hasFootnotes: hasFootnotes
+                    });
+                });
+                
+                // Sort verses by number
+                verses.sort((a, b) => parseInt(a.verseNumber) - parseInt(b.verseNumber));
             }
             
             // Method 2: Fallback to older structure
@@ -72,6 +77,7 @@
                 verseContainers.forEach(container => {
                     let verseNumber = '';
                     let verseText = '';
+                    let hasFootnotes = false;
                     
                     // Try to find verse number
                     const verseNumElement = container.querySelector('span.ChapterContent_label__R2PLt, .verse-num, .v-num');
@@ -84,19 +90,24 @@
                     // Get verse text
                     const clonedContainer = container.cloneNode(true);
                     
-                    // Remove verse number and footnotes
-                    const unwantedElements = clonedContainer.querySelectorAll(
-                        'span.ChapterContent_label__R2PLt, .verse-num, .v-num, ' +
-                        'span.ChapterContent_note__YlDW0, .note, .footnote'
-                    );
-                    unwantedElements.forEach(el => el.remove());
+                    // Check for footnotes
+                    const footnotes = clonedContainer.querySelectorAll('span.ChapterContent_note__YlDW0, .note, .footnote');
+                    if (footnotes.length > 0) {
+                        hasFootnotes = true;
+                        footnotes.forEach(footnote => footnote.remove());
+                    }
+                    
+                    // Remove verse number labels
+                    const labels = clonedContainer.querySelectorAll('span.ChapterContent_label__R2PLt, .verse-num, .v-num');
+                    labels.forEach(label => label.remove());
                     
                     verseText = clonedContainer.textContent.trim().replace(/\s+/g, ' ');
                     
                     if (verseNumber && verseText) {
                         verses.push({
                             verseNumber: verseNumber,
-                            verseText: verseText
+                            verseText: verseText,
+                            hasFootnotes: hasFootnotes
                         });
                     }
                 });
@@ -118,7 +129,8 @@
                         if (match) {
                             potentialVerses.push({
                                 verseNumber: match[1],
-                                verseText: match[2].trim()
+                                verseText: match[2].trim(),
+                                hasFootnotes: false
                             });
                         }
                     }

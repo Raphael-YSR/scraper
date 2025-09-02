@@ -1,4 +1,4 @@
-// popup.js - Fixed version with CSV export and correct URL handling
+// popup.js - Updated with navigation boundaries and text vectorization
 
 document.addEventListener('DOMContentLoaded', async () => {
     const statusEl = document.getElementById('status');
@@ -13,21 +13,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cancelButton = document.getElementById('cancelExtraction');
 
     let extractionCancelled = false;
-    let browserTranslationsMap = {};
+    let browserTranslationsMap = {}; // For URL navigation (browser version IDs)
+    let translationsMap = {}; // For CSV output (1-8)
     let books = {};
     let bookAbbreviationToIdMap = {};
+
+    // Common stop words to remove from vectorization
+    const stopWords = new Set([
+        'a', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'by', 'for', 'from',
+        'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the',
+        'to', 'was', 'will', 'with', 'but', 'or', 'not', 'have', 'had', 'do',
+        'does', 'did', 'would', 'could', 'should', 'may', 'might', 'can',
+        'shall', 'this', 'these', 'those', 'they', 'them', 'their', 'his',
+        'her', 'him', 'she', 'i', 'you', 'we', 'us', 'our', 'your', 'my',
+        'me', 'am', 'were', 'being', 'been', 'into', 'through', 'during',
+        'before', 'after', 'above', 'below', 'up', 'down', 'out', 'off',
+        'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there',
+        'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few',
+        'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'only', 'own',
+        'same', 'so', 'than', 'too', 'very', 'if', 'because', 'what', 'which',
+        'who', 'whom'
+    ]);
+
+    // Function to create PostgreSQL tsvector format
+    const createTsVector = (text) => {
+        // Convert to lowercase and split into words
+        const words = text.toLowerCase()
+            .replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
+            .split(/\s+/)
+            .filter(word => word.length > 0);
+
+        // Create word position map
+        const wordPositions = new Map();
+        
+        words.forEach((word, index) => {
+            if (!stopWords.has(word) && word.length > 1) {
+                if (wordPositions.has(word)) {
+                    wordPositions.get(word).push(index + 1);
+                } else {
+                    wordPositions.set(word, [index + 1]);
+                }
+            }
+        });
+
+        // Convert to tsvector format: 'word':position1,position2
+        const tsvectorParts = [];
+        const sortedWords = Array.from(wordPositions.keys()).sort();
+        
+        sortedWords.forEach(word => {
+            const positions = wordPositions.get(word);
+            tsvectorParts.push(`'${word}':${positions.join(',')}`);
+        });
+
+        return tsvectorParts.join(' ');
+    };
 
     // Load data from JSON files
     try {
         statusEl.textContent = 'Loading data...';
         
-        const [translationsResponse, booksResponse, allBooksResponse] = await Promise.all([
+        const [translationsResponse, browserVersionResponse, booksResponse, allBooksResponse] = await Promise.all([
             fetch(chrome.runtime.getURL("translations.json")),
+            fetch(chrome.runtime.getURL("browserversion.json")),
             fetch(chrome.runtime.getURL("books.json")),
             fetch(chrome.runtime.getURL("all_books.json"))
         ]);
 
-        browserTranslationsMap = await translationsResponse.json();
+        translationsMap = await translationsResponse.json(); // For CSV (1-8)
+        browserTranslationsMap = await browserVersionResponse.json(); // For URL navigation
         const bookAbbreviations = await booksResponse.json();
         const allBooks = await allBooksResponse.json();
 
@@ -105,7 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         URL.revokeObjectURL(url);
     };
 
-    // Convert verses to CSV format matching your example
+    // Convert verses to CSV format with vectorized searchable text
     const convertToCSV = (versesData) => {
         const { bookInfo, verses } = versesData;
         const headers = ['translationid', 'bookid', 'chapternumber', 'versenumber', 'versetext', 'versetextsearchable', 'hasfootnotes', 'wordcount'];
@@ -114,17 +167,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         verses.forEach(verse => {
             const verseText = verse.verseText.replace(/"/g, '""'); // Escape quotes
-            const searchableText = verseText.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
-            const wordCount = verseText.split(/\s+/).length;
+            const searchableText = createTsVector(verse.verseText); // Create tsvector format
+            const wordCount = verse.verseText.split(/\s+/).length;
             
             const row = [
-                browserTranslationsMap[bookInfo.translationAbbr] || bookInfo.translationId,
+                translationsMap[bookInfo.translationAbbr] || 1, // Use correct translation IDs (1-8)
                 bookInfo.bookId,
                 bookInfo.chapter,
                 verse.verseNumber,
                 `"${verseText}"`,
                 `"${searchableText}"`,
-                'f', // hasfootnotes - defaulting to false
+                verse.hasFootnotes ? 't' : 'f', // Use actual footnote detection
                 wordCount
             ];
             
@@ -237,6 +290,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
 
+    // Check if at chapter boundaries
+    const checkChapterBoundaries = async () => {
+        const bookInfo = await parseCurrentURL();
+        if (!bookInfo) return;
+
+        const maxChapter = bookChapterCounts[bookInfo.bookAbbr];
+        const currentChapter = bookInfo.chapter;
+
+        // Update button states and show messages
+        if (currentChapter >= maxChapter) {
+            nextChapterButton.disabled = true;
+            nextChapterButton.textContent = 'Last Chapter';
+            if (currentChapter > maxChapter) {
+                statusEl.textContent = 'Already at the last chapter.';
+            }
+        } else {
+            nextChapterButton.disabled = false;
+            nextChapterButton.textContent = '→';
+        }
+
+        if (currentChapter <= 1) {
+            prevChapterButton.disabled = true;
+            prevChapterButton.textContent = 'First Chapter';
+        } else {
+            prevChapterButton.disabled = false;
+            prevChapterButton.textContent = '←';
+        }
+    };
+
     // Translation navigation buttons
     const translationButtons = {
         'navKJV': 'KJV',
@@ -254,7 +336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (button) {
             button.addEventListener('click', () => {
                 const translationAbbr = translationButtons[buttonId];
-                const translationId = browserTranslationsMap[translationAbbr];
+                const translationId = browserTranslationsMap[translationAbbr]; // Use browser version IDs for navigation
                 
                 chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                     const currentTab = tabs[0];
@@ -355,17 +437,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             allVerses.forEach(verse => {
                 const verseText = verse.verseText.replace(/"/g, '""');
-                const searchableText = verseText.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
-                const wordCount = verseText.split(/\s+/).length;
+                const searchableText = createTsVector(verse.verseText); // Create tsvector format
+                const wordCount = verse.verseText.split(/\s+/).length;
                 
                 const row = [
-                    browserTranslationsMap[bookInfo.translationAbbr] || bookInfo.translationId,
+                    translationsMap[bookInfo.translationAbbr] || 1, // Use correct translation IDs (1-8)
                     bookInfo.bookId,
                     verse.chapter,
                     verse.verseNumber,
                     `"${verseText}"`,
                     `"${searchableText}"`,
-                    'f',
+                    verse.hasFootnotes ? 't' : 'f', // Use actual footnote detection
                     wordCount
                 ];
                 
@@ -388,37 +470,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         progressContainer.style.display = 'none';
     });
 
-    // Navigation buttons with correct URL parsing
-    prevChapterButton.addEventListener('click', () => {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const currentUrl = new URL(tabs[0].url);
-            const pathParts = currentUrl.pathname.split('/').filter(p => p.length > 0);
-            
-            if (pathParts.length >= 3) {
-                const bookChapterPart = pathParts[2];
-                const parts = bookChapterPart.split('.');
-                const currentChapter = parseInt(parts[1]);
-                
-                if (currentChapter > 1) {
-                    navigateToChapter(currentChapter - 1);
-                }
-            }
-        });
+    // Navigation buttons with boundary checking
+    prevChapterButton.addEventListener('click', async () => {
+        const bookInfo = await parseCurrentURL();
+        if (!bookInfo) return;
+
+        if (bookInfo.chapter > 1) {
+            navigateToChapter(bookInfo.chapter - 1);
+        } else {
+            statusEl.textContent = 'Already at the first chapter.';
+        }
     });
 
-    nextChapterButton.addEventListener('click', () => {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const currentUrl = new URL(tabs[0].url);
-            const pathParts = currentUrl.pathname.split('/').filter(p => p.length > 0);
-            
-            if (pathParts.length >= 3) {
-                const bookChapterPart = pathParts[2];
-                const parts = bookChapterPart.split('.');
-                const currentChapter = parseInt(parts[1]);
-                
-                navigateToChapter(currentChapter + 1);
-            }
-        });
+    nextChapterButton.addEventListener('click', async () => {
+        const bookInfo = await parseCurrentURL();
+        if (!bookInfo) return;
+
+        const maxChapter = bookChapterCounts[bookInfo.bookAbbr];
+        if (bookInfo.chapter < maxChapter) {
+            navigateToChapter(bookInfo.chapter + 1);
+        } else {
+            statusEl.textContent = 'Already at the last chapter.';
+        }
     });
 
     chapter1Button.addEventListener('click', () => {
@@ -430,4 +503,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusEl.textContent = 'Cancelling...';
         progressContainer.style.display = 'none';
     });
+
+    // Check boundaries on popup open
+    setTimeout(checkChapterBoundaries, 500);
 });
