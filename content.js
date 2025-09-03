@@ -5,6 +5,24 @@
     
     console.log('Bible extractor content script loaded');
 
+    // Function to convert combined verse numbers to concatenated format
+    function formatVerseNumber(verseLabel) {
+        if (!verseLabel) return '';
+        
+        // Handle ranges like "14-15" -> "1415", "7-8" -> "78", "20-23" -> "2023"
+        if (verseLabel.includes('-')) {
+            const parts = verseLabel.split('-');
+            if (parts.length === 2) {
+                const start = parts[0].trim();
+                const end = parts[1].trim();
+                return start + end;
+            }
+        }
+        
+        // Single verse numbers remain unchanged
+        return verseLabel.trim();
+    }
+
     // Function to extract verses from the page
     function extractVerses() {
         const verses = [];
@@ -23,10 +41,26 @@
                     const usfmAttr = element.getAttribute('data-usfm');
                     
                     if (usfmAttr && usfmAttr.includes('.')) {
-                        const parts = usfmAttr.split('.');
-                        if (parts.length >= 3) {
-                            const verseNumber = parts[parts.length - 1];
-                            
+                        // Always try to get verse number from label element first (more reliable for combined verses)
+                        const labelElement = element.querySelector('span.ChapterContent_label__R2PLt, .verse-num, .v-num');
+                        let verseNumber = '';
+                        
+                        if (labelElement) {
+                            const labelText = labelElement.textContent.trim();
+                            verseNumber = formatVerseNumber(labelText);
+                            console.log(`Found label: "${labelText}" -> formatted: "${verseNumber}"`);
+                        }
+                        
+                        // Only use data-usfm as fallback if no label found
+                        if (!verseNumber) {
+                            const parts = usfmAttr.split('.');
+                            if (parts.length >= 3) {
+                                verseNumber = parts[parts.length - 1];
+                                console.log(`Using data-usfm fallback: "${verseNumber}"`);
+                            }
+                        }
+                        
+                        if (verseNumber) {
                             // Get text content, excluding footnotes and verse numbers
                             const clonedElement = element.cloneNode(true);
                             
@@ -64,8 +98,12 @@
                     });
                 });
                 
-                // Sort verses by number
-                verses.sort((a, b) => parseInt(a.verseNumber) - parseInt(b.verseNumber));
+                // Sort verses by the first number in combined verses (e.g., "1415" sorts by 14)
+                verses.sort((a, b) => {
+                    const aNum = parseInt(a.verseNumber.match(/^\d+/)[0]);
+                    const bNum = parseInt(b.verseNumber.match(/^\d+/)[0]);
+                    return aNum - bNum;
+                });
             }
             
             // Method 2: Fallback to older structure
@@ -79,12 +117,14 @@
                     let verseText = '';
                     let hasFootnotes = false;
                     
-                    // Try to find verse number
+                    // Try to find verse number - check for combined verses
                     const verseNumElement = container.querySelector('span.ChapterContent_label__R2PLt, .verse-num, .v-num');
                     if (verseNumElement) {
-                        verseNumber = verseNumElement.textContent.trim().replace(/\D/g, '');
+                        const labelText = verseNumElement.textContent.trim();
+                        // Convert combined verses to concatenated format
+                        verseNumber = formatVerseNumber(labelText);
                     } else if (container.getAttribute('data-verse')) {
-                        verseNumber = container.getAttribute('data-verse');
+                        verseNumber = formatVerseNumber(container.getAttribute('data-verse'));
                     }
                     
                     // Get verse text
@@ -111,34 +151,6 @@
                         });
                     }
                 });
-            }
-            
-            // Method 3: Last resort - try to find any text that looks like verses
-            if (verses.length === 0) {
-                console.log('Trying last resort method for verse extraction');
-                
-                // Look for any numbered text that might be verses
-                const allSpans = document.querySelectorAll('span');
-                const potentialVerses = [];
-                
-                allSpans.forEach(span => {
-                    const text = span.textContent.trim();
-                    if (text.match(/^\d+\s+/)) {
-                        // Text starts with a number - might be a verse
-                        const match = text.match(/^(\d+)\s+(.+)$/);
-                        if (match) {
-                            potentialVerses.push({
-                                verseNumber: match[1],
-                                verseText: match[2].trim(),
-                                hasFootnotes: false
-                            });
-                        }
-                    }
-                });
-                
-                if (potentialVerses.length > 0) {
-                    verses.push(...potentialVerses);
-                }
             }
             
         } catch (error) {
