@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Bible Parser</title>
+    <meta charset="UTF-8">
     <style>
         * {
             margin: 0;
@@ -49,7 +50,7 @@
         .logo {
             font-size: 24px;
             font-weight: bold;
-            color: #4CAF50; /* A nice green color */
+            color: #4CAF50;
             text-shadow: 0 0 5px #4CAF50, 0 0 10px #4CAF50;
             margin-bottom: 5px;
         }
@@ -93,14 +94,23 @@
             text-shadow: 0 0 5px #00ff8c;
         }
         
-        button:hover {
+        button:hover:not(:disabled) {
             background-color: #00ff8c;
             color: #1a1a2e;
             box-shadow: 0 0 10px #00ff8c, 0 0 20px #00ff8c;
         }
         
-        button:active {
+        button:active:not(:disabled) {
             transform: scale(0.95);
+        }
+
+        button:disabled {
+            background-color: #222;
+            color: #555;
+            border-color: #555;
+            cursor: not-allowed;
+            text-shadow: none;
+            opacity: 0.5;
         }
 
         #extractFullBook, #chapter1 {
@@ -123,6 +133,7 @@
             height: 100%;
             background-color: #4CAF50;
             transition: width 0.3s ease;
+            width: 0%;
         }
 
         .progress-text {
@@ -161,9 +172,9 @@
         </div>
 
         <div class="button-group">
-            <button id="prevChapter">&larr;</button>
+            <button id="prevChapter">‹</button>
             <button id="extract">EXTRACT</button>
-            <button id="nextChapter">&rarr;</button>
+            <button id="nextChapter">›</button>
         </div>
         <button id="extractFullBook">EXTRACT FULL BOOK</button>
         <button id="chapter1">Chapter 1</button>

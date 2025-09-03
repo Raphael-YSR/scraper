@@ -1,4 +1,4 @@
-// popup.js - Updated with navigation boundaries and text vectorization
+// popup.js - Updated with proper arrow navigation and disabled button styling
 
 document.addEventListener('DOMContentLoaded', async () => {
     const statusEl = document.getElementById('status');
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 verse.verseNumber,
                 `"${verseText}"`,
                 `"${searchableText}"`,
-                verse.hasFootnotes ? 't' : 'f', // Use actual footnote detection
+'f', // No footnotes for now
                 wordCount
             ];
             
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
 
-    // Check if at chapter boundaries
+    // Check if at chapter boundaries and update button states
     const checkChapterBoundaries = async () => {
         const bookInfo = await parseCurrentURL();
         if (!bookInfo) return;
@@ -298,25 +298,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const maxChapter = bookChapterCounts[bookInfo.bookAbbr];
         const currentChapter = bookInfo.chapter;
 
-        // Update button states and show messages
-        if (currentChapter >= maxChapter) {
-            nextChapterButton.disabled = true;
-            nextChapterButton.textContent = 'Last Chapter';
-            if (currentChapter > maxChapter) {
-                statusEl.textContent = 'Already at the last chapter.';
-            }
-        } else {
-            nextChapterButton.disabled = false;
-            nextChapterButton.textContent = '→';
-        }
-
-        if (currentChapter <= 1) {
-            prevChapterButton.disabled = true;
-            prevChapterButton.textContent = 'First Chapter';
-        } else {
-            prevChapterButton.disabled = false;
-            prevChapterButton.textContent = '←';
-        }
+        // Update button states - disable at boundaries but keep arrow text
+        prevChapterButton.disabled = (currentChapter <= 1);
+        nextChapterButton.disabled = (currentChapter >= maxChapter);
     };
 
     // Translation navigation buttons
@@ -395,6 +379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         extractionCancelled = false;
         progressContainer.style.display = 'block';
+        cancelButton.style.display = 'block';
         const bookName = books[bookInfo.bookId] || 'Unknown';
         statusEl.textContent = `Starting full book extraction for ${bookName}...`;
 
@@ -447,7 +432,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     verse.verseNumber,
                     `"${verseText}"`,
                     `"${searchableText}"`,
-                    verse.hasFootnotes ? 't' : 'f', // Use actual footnote detection
+'f', // No footnotes for now
                     wordCount
                 ];
                 
@@ -468,40 +453,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         progressContainer.style.display = 'none';
+        cancelButton.style.display = 'none';
     });
 
-    // Navigation buttons with boundary checking
+    // Navigation buttons
     prevChapterButton.addEventListener('click', async () => {
         const bookInfo = await parseCurrentURL();
-        if (!bookInfo) return;
-
-        if (bookInfo.chapter > 1) {
-            navigateToChapter(bookInfo.chapter - 1);
-        } else {
-            statusEl.textContent = 'Already at the first chapter.';
-        }
+        if (!bookInfo || bookInfo.chapter <= 1) return;
+        
+        navigateToChapter(bookInfo.chapter - 1);
+        setTimeout(checkChapterBoundaries, 1000); // Check boundaries after navigation
     });
 
     nextChapterButton.addEventListener('click', async () => {
         const bookInfo = await parseCurrentURL();
         if (!bookInfo) return;
-
+        
         const maxChapter = bookChapterCounts[bookInfo.bookAbbr];
-        if (bookInfo.chapter < maxChapter) {
-            navigateToChapter(bookInfo.chapter + 1);
-        } else {
-            statusEl.textContent = 'Already at the last chapter.';
-        }
+        if (bookInfo.chapter >= maxChapter) return;
+        
+        navigateToChapter(bookInfo.chapter + 1);
+        setTimeout(checkChapterBoundaries, 1000); // Check boundaries after navigation
     });
 
     chapter1Button.addEventListener('click', () => {
         navigateToChapter(1);
+        setTimeout(checkChapterBoundaries, 1000); // Check boundaries after navigation
     });
 
     cancelButton.addEventListener('click', () => {
         extractionCancelled = true;
         statusEl.textContent = 'Cancelling...';
         progressContainer.style.display = 'none';
+        cancelButton.style.display = 'none';
     });
 
     // Check boundaries on popup open
