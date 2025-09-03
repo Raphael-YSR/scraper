@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 verse.verseNumber,
                 `"${verseText}"`,
                 `"${searchableText}"`,
-'f', // No footnotes for now
+                verse.hasFootnotes ? 't' : 'f', // Use actual footnote detection
                 wordCount
             ];
             
@@ -484,8 +484,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     cancelButton.addEventListener('click', () => {
         extractionCancelled = true;
         statusEl.textContent = 'Cancelling...';
-        progressContainer.style.display = 'none';
-        cancelButton.style.display = 'none';
+        progressText.textContent = 'Cancelling...';
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            cancelButton.style.display = 'none';
+        }, 1000);
     });
 
     // Check boundaries on popup open
