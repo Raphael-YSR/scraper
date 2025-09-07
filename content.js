@@ -63,6 +63,35 @@
         return { text, hasFootnotes };
     }
 
+    // Corrected function to extract verse number from data-usfm attribute
+    // Now checks for a verse number to prevent chapter headings from being scraped
+    function extractVerseFromUsfm(usfmAttr) {
+        if (!usfmAttr) return null;
+
+        // Handle combined verses like "PSA.27.5+PSA.27.6"
+        if (usfmAttr.includes('+')) {
+            const parts = usfmAttr.split('+');
+            if (parts.length === 2) {
+                const firstVerse = parts[0].split('.').pop();
+                const secondVerse = parts[1].split('.').pop();
+                return firstVerse + secondVerse;
+            }
+        }
+
+        const parts = usfmAttr.split('.');
+        // Check if there are at least 3 parts (book, chapter, verse)
+        if (parts.length >= 3) {
+            const verseNumber = parts[parts.length - 1];
+            // Skip footnote markers
+            if (verseNumber === '#' || verseNumber.includes('#')) {
+                return null;
+            }
+            return verseNumber;
+        }
+
+        return null;
+    }
+
     // Main function to extract verses from the page
     function extractVerses() {
         const verses = [];
@@ -70,47 +99,44 @@
         try {
             console.log('Starting verse extraction...');
 
-            // Select all potential verse containers based on data attributes and classes
+            // Corrected selector: explicitly target span with data-usfm attribute
             const allElements = document.querySelectorAll(
-                '[data-usfm], span.ChapterContent_verse__57FIw, .verse, [data-verse]'
+                'span[data-usfm], span.ChapterContent_verse__57FIw, .verse, [data-verse]'
             );
             console.log(`Found ${allElements.length} elements to process`);
 
             // Use a Map to group elements by their unique verse number
             const verseGroups = new Map();
 
-            allElements.forEach((element, index) => {
+            allElements.forEach((element) => {
                 let verseNumber = null;
 
-                // 1. Prioritize data-usfm attribute
+                // 1. Prioritize data-usfm attribute (enhanced extraction)
                 const usfmAttr = element.getAttribute('data-usfm');
                 if (usfmAttr) {
-                    const parts = usfmAttr.split('.');
-                    if (parts.length >= 3) {
-                        verseNumber = parts[2];
-                    }
+                    verseNumber = extractVerseFromUsfm(usfmAttr);
                 }
 
                 // 2. Fallback to verse label or data-verse if data-usfm is missing or incomplete
                 if (!verseNumber) {
-                    const labelElement = element.querySelector('.verse-num, .v-num');
+                    const labelElement = element.querySelector('.verse-num, .v-num, span.ChapterContent_label__R2PLt');
                     if (labelElement) {
                         const labelText = labelElement.textContent.trim();
                         verseNumber = formatVerseNumber(labelText);
                     } else {
                         const dataVerseAttr = element.getAttribute('data-verse');
                         if (dataVerseAttr) {
-                            verseNumber = dataVerseAttr;
+                            verseNumber = formatVerseNumber(dataVerseAttr);
                         }
                     }
                 }
 
-                if (!verseNumber) {
+                if (!verseNumber || verseNumber === null) {
                     // Skip if a valid verse number couldn't be determined
                     return;
                 }
 
-                // Get text from the element. This is the key.
+                // Get text from the element
                 const textContent = extractTextFromElement(element);
 
                 if (textContent.text.trim()) {
@@ -123,10 +149,12 @@
                     const verseData = verseGroups.get(verseNumber);
                     verseData.textParts.push(textContent.text);
 
-                    // Update footnote status
+                    // Update footnote status (per-verse tracking)
                     if (textContent.hasFootnotes) {
                         verseData.hasFootnotes = true;
                     }
+
+                    console.log(`Added to verse ${verseNumber}: "${textContent.text}"`);
                 }
             });
 
@@ -139,6 +167,7 @@
                         verseText: combinedText,
                         hasFootnotes: verseData.hasFootnotes
                     });
+                    console.log(`Final verse ${verseNumber}: "${combinedText}"`);
                 }
             });
 
@@ -157,7 +186,6 @@
         console.log(`Successfully extracted ${verses.length} verses`);
         return verses;
     }
-
 
     // Function to check if page has loaded with verse content
     function isPageReady() {
