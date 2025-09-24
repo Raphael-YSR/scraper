@@ -1,4 +1,4 @@
-// popup.js - Updated with proper arrow navigation and disabled button styling
+// popup.js - Enhanced with background execution support
 
 document.addEventListener('DOMContentLoaded', async () => {
     const statusEl = document.getElementById('status');
@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let translationsMap = {}; // For CSV output (1-8)
     let books = {};
     let bookAbbreviationToIdMap = {};
+    let extractionTabId = null; // Track the tab being used for extraction
 
     // Common stop words to remove from vectorization
     const stopWords = new Set([
@@ -34,6 +35,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         'same', 'so', 'than', 'too', 'very', 'if', 'because', 'what', 'which',
         'who', 'whom'
     ]);
+
+    // Keep the window active during extraction
+    let keepAliveInterval = null;
+    
+    const startKeepAlive = () => {
+        if (keepAliveInterval) return;
+        
+        keepAliveInterval = setInterval(() => {
+            // Ping the background script to keep it alive
+            chrome.runtime.sendMessage({ action: "keepAlive" }, () => {
+                if (chrome.runtime.lastError) {
+                    // Ignore errors, just trying to keep alive
+                }
+            });
+            
+            // Also ensure the extraction tab stays active
+            if (extractionTabId) {
+                chrome.tabs.get(extractionTabId, (tab) => {
+                    if (!chrome.runtime.lastError && tab) {
+                        // Tab exists, optionally make it active to prevent throttling
+                        chrome.tabs.update(extractionTabId, { active: true });
+                    }
+                });
+            }
+        }, 10000); // Every 10 seconds
+    };
+    
+    const stopKeepAlive = () => {
+        if (keepAliveInterval) {
+            clearInterval(keepAliveInterval);
+            keepAliveInterval = null;
+        }
+    };
 
     // Function to create PostgreSQL tsvector format
     const createTsVector = (text) => {
@@ -209,31 +243,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
 
-    // Wait for page to be ready
+    // Wait for page to be ready with more aggressive retries
     const waitForPageReady = (tabId) => {
         return new Promise((resolve, reject) => {
             let attempts = 0;
-            const maxAttempts = 20;
+            const maxAttempts = 30; // Increased attempts
             
             const checkReady = () => {
-                chrome.tabs.sendMessage(tabId, { action: "checkPageLoaded" }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        attempts++;
-                        if (attempts < maxAttempts) {
-                            setTimeout(checkReady, 500);
+                // First make sure tab is active
+                chrome.tabs.update(tabId, { active: true }, () => {
+                    chrome.tabs.sendMessage(tabId, { action: "checkPageLoaded" }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            attempts++;
+                            if (attempts < maxAttempts) {
+                                setTimeout(checkReady, 1000); // Longer delays
+                            } else {
+                                reject(new Error('Timeout waiting for page to load'));
+                            }
+                        } else if (response && response.loaded) {
+                            resolve();
                         } else {
-                            reject(new Error('Timeout waiting for page to load'));
+                            attempts++;
+                            if (attempts < maxAttempts) {
+                                setTimeout(checkReady, 1000);
+                            } else {
+                                reject(new Error('Page not ready'));
+                            }
                         }
-                    } else if (response && response.loaded) {
-                        resolve();
-                    } else {
-                        attempts++;
-                        if (attempts < maxAttempts) {
-                            setTimeout(checkReady, 500);
-                        } else {
-                            reject(new Error('Page not ready'));
-                        }
-                    }
+                    });
                 });
             };
             
@@ -250,6 +287,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             throw new Error('No active tab found');
         }
 
+        extractionTabId = currentTab.id;
         await ensureContentScript(currentTab.id);
         await waitForPageReady(currentTab.id);
 
@@ -267,26 +305,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // Navigate to specific chapter using correct URL format
-    const navigateToChapter = (chapter) => {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const currentTab = tabs[0];
-            const currentUrl = new URL(currentTab.url);
-            const pathParts = currentUrl.pathname.split('/').filter(p => p.length > 0);
-
-            if (pathParts.length < 3) {
-                statusEl.textContent = 'Error: Not on a valid Bible page.';
-                return;
-            }
-
-            const translationId = pathParts[1];
-            const bookChapterPart = pathParts[2];
-            const parts = bookChapterPart.split('.');
-            const bookAbbr = parts[0];
-            const translationAbbr = parts[2] || 'NIV';
+    const navigateToChapter = (chapter, tabId = null) => {
+        return new Promise((resolve, reject) => {
+            const targetTabId = tabId || extractionTabId;
             
-            // Correct URL format: /bible/111/JOS.1.NIV
-            const newUrl = `https://www.bible.com/bible/${translationId}/${bookAbbr}.${chapter}.${translationAbbr}`;
-            chrome.tabs.update(currentTab.id, { url: newUrl });
+            chrome.tabs.get(targetTabId, (tab) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(`Tab not found: ${chrome.runtime.lastError.message}`));
+                    return;
+                }
+                
+                const currentUrl = new URL(tab.url);
+                const pathParts = currentUrl.pathname.split('/').filter(p => p.length > 0);
+
+                if (pathParts.length < 3) {
+                    reject(new Error('Not on a valid Bible page'));
+                    return;
+                }
+
+                const translationId = pathParts[1];
+                const bookChapterPart = pathParts[2];
+                const parts = bookChapterPart.split('.');
+                const bookAbbr = parts[0];
+                const translationAbbr = parts[2] || 'NIV';
+                
+                // Correct URL format: /bible/111/JOS.1.NIV
+                const newUrl = `https://www.bible.com/bible/${translationId}/${bookAbbr}.${chapter}.${translationAbbr}`;
+                
+                chrome.tabs.update(targetTabId, { url: newUrl, active: true }, (updatedTab) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(updatedTab);
+                    }
+                });
+            });
         });
     };
 
@@ -335,7 +388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         
                         // Correct URL format
                         const newUrl = `https://www.bible.com/bible/${translationId}/${bookAbbr}.${chapter}.${translationAbbr}`;
-                        chrome.tabs.update(currentTab.id, { url: newUrl });
+                        chrome.tabs.update(currentTab.id, { url: newUrl, active: true });
                     }
                 });
             });
@@ -345,6 +398,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Extract single chapter as CSV
     extractButton.addEventListener('click', async () => {
         statusEl.textContent = 'Extracting verses...';
+        startKeepAlive();
+        
         try {
             const bookInfo = await parseCurrentURL();
             if (!bookInfo) {
@@ -360,10 +415,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             statusEl.textContent = `Error: ${error.message}`;
             console.error('Extraction failed:', error);
+        } finally {
+            stopKeepAlive();
         }
     });
 
-    // Extract full book as CSV
+    // Extract full book as CSV with enhanced background support
     extractFullBookButton.addEventListener('click', async () => {
         const bookInfo = await parseCurrentURL();
         if (!bookInfo) {
@@ -378,12 +435,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         extractionCancelled = false;
+        startKeepAlive(); // Start keep-alive mechanism
         progressContainer.style.display = 'block';
         cancelButton.style.display = 'block';
         const bookName = books[bookInfo.bookId] || 'Unknown';
         statusEl.textContent = `Starting full book extraction for ${bookName}...`;
 
+        // Get the current tab ID for extraction
+        const tabs = await new Promise(resolve => chrome.tabs.query({ active: true, currentWindow: true }, resolve));
+        extractionTabId = tabs[0].id;
+
         const allVerses = [];
+        let successfulChapters = 0;
 
         for (let i = 1; i <= totalChapters; i++) {
             if (extractionCancelled) {
@@ -394,10 +457,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             progressText.textContent = `Extracting ${bookInfo.bookAbbr} chapter ${i}/${totalChapters}...`;
             
             try {
-                navigateToChapter(i);
-                await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for page load
+                // Navigate and ensure tab is active
+                await navigateToChapter(i, extractionTabId);
                 
-                const verses = await extractVersesFromCurrentTab();
+                // Wait longer for page load and ensure tab stays active
+                await new Promise(resolve => setTimeout(resolve, 4000));
+                
+                // Make sure content script is injected
+                await ensureContentScript(extractionTabId);
+                await waitForPageReady(extractionTabId);
+                
+                // Extract verses
+                const verses = await new Promise((resolve, reject) => {
+                    chrome.tabs.sendMessage(extractionTabId, { action: "extractVerses" }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else if (response && response.verses) {
+                            resolve(response.verses);
+                        } else {
+                            reject(new Error('No verses found'));
+                        }
+                    });
+                });
                 
                 // Add each verse with chapter info
                 verses.forEach(verse => {
@@ -407,8 +488,45 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                 });
 
+                successfulChapters++;
+                console.log(`Successfully extracted ${bookInfo.bookAbbr} chapter ${i}: ${verses.length} verses`);
+
             } catch (error) {
                 console.error(`Error extracting ${bookInfo.bookAbbr} chapter ${i}:`, error);
+                progressText.textContent = `Error on chapter ${i}, retrying...`;
+                
+                // Retry once
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await navigateToChapter(i, extractionTabId);
+                    await new Promise(resolve => setTimeout(resolve, 4000));
+                    await ensureContentScript(extractionTabId);
+                    await waitForPageReady(extractionTabId);
+                    
+                    const verses = await new Promise((resolve, reject) => {
+                        chrome.tabs.sendMessage(extractionTabId, { action: "extractVerses" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else if (response && response.verses) {
+                                resolve(response.verses);
+                            } else {
+                                reject(new Error('No verses found'));
+                            }
+                        });
+                    });
+                    
+                    verses.forEach(verse => {
+                        allVerses.push({
+                            ...verse,
+                            chapter: i
+                        });
+                    });
+                    
+                    successfulChapters++;
+                    console.log(`Successfully extracted ${bookInfo.bookAbbr} chapter ${i} on retry: ${verses.length} verses`);
+                } catch (retryError) {
+                    console.error(`Retry failed for ${bookInfo.bookAbbr} chapter ${i}:`, retryError);
+                }
             }
 
             const progress = (i / totalChapters) * 100;
@@ -432,7 +550,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     verse.verseNumber,
                     `"${verseText}"`,
                     `"${searchableText}"`,
-'f', // No footnotes for now
+                    verse.hasFootnotes ? 't' : 'f',
                     wordCount
                 ];
                 
@@ -449,11 +567,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            statusEl.textContent = 'Full book extraction complete!';
+            statusEl.textContent = `Full book extraction complete! (${successfulChapters}/${totalChapters} chapters, ${allVerses.length} verses)`;
         }
         
+        stopKeepAlive(); // Stop keep-alive mechanism
         progressContainer.style.display = 'none';
         cancelButton.style.display = 'none';
+        extractionTabId = null;
     });
 
     // Navigation buttons
@@ -461,7 +581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const bookInfo = await parseCurrentURL();
         if (!bookInfo || bookInfo.chapter <= 1) return;
         
-        navigateToChapter(bookInfo.chapter - 1);
+        await navigateToChapter(bookInfo.chapter - 1);
         setTimeout(checkChapterBoundaries, 1000); // Check boundaries after navigation
     });
 
@@ -472,22 +592,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const maxChapter = bookChapterCounts[bookInfo.bookAbbr];
         if (bookInfo.chapter >= maxChapter) return;
         
-        navigateToChapter(bookInfo.chapter + 1);
+        await navigateToChapter(bookInfo.chapter + 1);
         setTimeout(checkChapterBoundaries, 1000); // Check boundaries after navigation
     });
 
-    chapter1Button.addEventListener('click', () => {
-        navigateToChapter(1);
+    chapter1Button.addEventListener('click', async () => {
+        await navigateToChapter(1);
         setTimeout(checkChapterBoundaries, 1000); // Check boundaries after navigation
     });
 
     cancelButton.addEventListener('click', () => {
         extractionCancelled = true;
+        stopKeepAlive();
         statusEl.textContent = 'Cancelling...';
         progressText.textContent = 'Cancelling...';
         setTimeout(() => {
             progressContainer.style.display = 'none';
             cancelButton.style.display = 'none';
+            extractionTabId = null;
         }, 1000);
     });
 
